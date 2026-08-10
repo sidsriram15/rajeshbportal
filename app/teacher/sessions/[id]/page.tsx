@@ -87,127 +87,112 @@ export default function SessionView({ params }: { params: { id: string } }) {
         </div>
       ) : null}
 
-      <div className="mx-auto grid max-w-[1160px] gap-7 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_324px] lg:px-7">
-        <div className="min-w-0 space-y-4">
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList>
-              <TabsTrigger value="summary">Write-up</TabsTrigger>
-              <TabsTrigger value="timeline">
-                Timeline
-                <Badge tone="outline" className="num">
-                  {session.topics.length + session.questions.length}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="transcript">Transcript</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="summary" className="space-y-5 pt-4">
-              {processing ? (
-                <ProcessingNotice />
-              ) : (
-                <>
-                  <SummaryEditor session={session} />
-                  <NotesEditor session={session} kind="key_point" />
-                  <NotesEditor session={session} kind="practice" />
-                </>
-              )}
-            </TabsContent>
-
-            <TabsContent value="timeline" className="pt-4">
-              <div className="panel py-2">
-                <Timeline session={session} editable />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="transcript" className="pt-4">
-              <div className="panel">
-                {session.transcript.length ? (
-                  <div className="space-y-2.5 px-4 py-3.5">
-                    <p className="pb-1 text-2xs text-faint">
-                      Only you can see this. Students never get the raw transcript.
-                    </p>
-                    {session.transcript.map((line) => (
-                      <p key={line.id} className="flex gap-3 text-[13px] leading-relaxed">
-                        <span className="num shrink-0 text-2xs text-faint">
-                          {stamp(line.startMs)}
-                        </span>
-                        <span
-                          className={`w-14 shrink-0 text-2xs font-medium ${
-                            line.speaker === "teacher" ? "text-accent" : "text-answer"
-                          }`}
-                        >
-                          {line.speaker === "teacher" ? "You" : student.name.split(" ")[0]}
-                        </span>
-                        <span className="text-muted">{line.text}</span>
-                      </p>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState
-                    icon={Ear}
-                    title="No transcript"
-                    description="Nothing was captured for this class."
-                  />
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        <div className="space-y-5">
-          <div className="panel p-3.5">
+      <div className="mx-auto max-w-[860px] px-5 py-6 lg:px-7">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="panel flex items-center gap-2.5 p-2.5 pr-3.5">
             <Link
               href={`/teacher/students/${student.id}`}
               className="flex items-center gap-2.5 rounded transition-opacity hover:opacity-80"
             >
               <Avatar name={student.name} color={student.color} src={student.avatarUrl} />
-              <div className="min-w-0">
-                <p className="truncate text-[13px] font-medium text-ink">{student.name}</p>
-                {student.yearGroup ? (
-                  <p className="truncate text-2xs text-faint">{student.yearGroup}</p>
-                ) : null}
-              </div>
+              <p className="truncate text-[13px] font-medium text-ink">{student.name}</p>
             </Link>
-            <div className="mt-3 flex items-center gap-2 border-t border-line pt-3 text-2xs text-faint">
-              <Clock className="size-3" />
-              {durationLabel(session.durationSeconds)} · {session.topics.length} topics ·{" "}
-              {session.questions.length} questions
-            </div>
           </div>
-
-          <Panel title="Topics" count={session.topics.length}>
-            <TopicsPanel session={session} editable />
-          </Panel>
-
-          <Panel title="Questions & answers" count={session.questions.length}>
-            <QuestionsPanel session={session} editable />
-          </Panel>
-
-          <Panel title="Resources" count={session.resources.length}>
-            <ResourcesPanel session={session} editable />
-          </Panel>
+          <span className="flex items-center gap-1.5 text-2xs text-faint">
+            <Clock className="size-3" />
+            {durationLabel(session.durationSeconds)} · {session.topics.length} topics ·{" "}
+            {session.questions.length} questions
+          </span>
         </div>
+
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="summary">Write-up</TabsTrigger>
+            <TabsTrigger value="timeline">
+              Timeline
+              <Badge tone="outline" className="num">
+                {session.topics.length + session.questions.length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="questions">
+              Q&amp;A
+              <Badge tone="question" className="num">
+                {session.questions.length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="resources">
+              Resources
+              <Badge tone="resource" className="num">
+                {session.resources.length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="transcript">Transcript</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="summary" className="space-y-5 pt-4">
+            {processing ? (
+              <ProcessingNotice />
+            ) : (
+              <>
+                <SummaryEditor session={session} />
+                <NotesEditor session={session} kind="key_point" />
+                <NotesEditor session={session} kind="practice" />
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="timeline" className="pt-4">
+            <div className="panel py-2">
+              <Timeline session={session} editable />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="questions" className="pt-4">
+            <div className="panel p-2">
+              <QuestionsPanel session={session} editable />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="resources" className="pt-4">
+            <div className="panel p-2">
+              <ResourcesPanel session={session} editable />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="transcript" className="pt-4">
+            <div className="panel">
+              {session.transcript.length ? (
+                <div className="space-y-2.5 px-4 py-3.5">
+                  <p className="pb-1 text-2xs text-faint">
+                    Only you can see this. Students never get the raw transcript.
+                  </p>
+                  {session.transcript.map((line) => (
+                    <p key={line.id} className="flex gap-3 text-[13px] leading-relaxed">
+                      <span className="num shrink-0 text-2xs text-faint">
+                        {stamp(line.startMs)}
+                      </span>
+                      <span
+                        className={`w-14 shrink-0 text-2xs font-medium ${
+                          line.speaker === "teacher" ? "text-accent" : "text-answer"
+                        }`}
+                      >
+                        {line.speaker === "teacher" ? "You" : student.name.split(" ")[0]}
+                      </span>
+                      <span className="text-muted">{line.text}</span>
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Ear}
+                  title="No transcript"
+                  description="Nothing was captured for this class."
+                />
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </>
-  );
-}
-
-function Panel({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="panel">
-      <div className="flex items-center gap-2 border-b border-line px-3.5 py-2">
-        <span className="eyebrow">{title}</span>
-        <span className="num ml-auto text-2xs text-faint">{count}</span>
-      </div>
-      <div className="p-2">{children}</div>
-    </section>
   );
 }

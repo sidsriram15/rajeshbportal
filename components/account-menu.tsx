@@ -1,9 +1,11 @@
 "use client";
 
-import { Moon, Sun } from "lucide-react";
-import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
+import { useRouter } from "next/navigation";
+import { Moon, Sun, LogOut } from "lucide-react";
+import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { Avatar } from "@/components/ui/primitives";
 import { useTheme } from "@/components/providers";
+import { createClient } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,6 +28,13 @@ export function AccountMenu({
   align?: "start" | "center" | "end";
 }) {
   const { dark, toggle } = useTheme();
+  const router = useRouter();
+
+  async function signOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace("/login");
+  }
 
   return (
     <Menu>
@@ -51,6 +60,11 @@ export function AccountMenu({
         <MenuItem onSelect={toggle}>
           {dark ? <Sun /> : <Moon />}
           {dark ? "Light appearance" : "Dark appearance"}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem onSelect={signOut}>
+          <LogOut />
+          Sign out
         </MenuItem>
       </MenuContent>
     </Menu>
