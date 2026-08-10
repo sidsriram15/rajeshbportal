@@ -1,0 +1,143 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --canvas: 40 24% 97%;
+    --surface: 0 0% 100%;
+    --raised: 40 30% 99%;
+
+    --ink: 30 9% 12%;
+    --muted: 34 6% 42%;
+    --faint: 34 6% 60%;
+
+    --line: 36 16% 89%;
+    --line-strong: 36 14% 81%;
+
+    --accent: 226 52% 44%;
+    --accent-soft: 226 62% 95%;
+
+    --topic: 226 52% 44%;
+    --question: 28 74% 38%;
+    --answer: 166 44% 28%;
+    --resource: 268 38% 46%;
+    --live: 4 68% 47%;
+    --danger: 4 68% 47%;
+
+    --shadow: 30 24% 12%;
+  }
+
+  .dark {
+    --canvas: 40 6% 8%;
+    --surface: 40 5% 11%;
+    --raised: 40 5% 14%;
+
+    --ink: 40 16% 92%;
+    --muted: 38 6% 63%;
+    --faint: 38 5% 45%;
+
+    --line: 40 5% 19%;
+    --line-strong: 40 5% 27%;
+
+    --accent: 226 72% 72%;
+    --accent-soft: 226 38% 20%;
+
+    --topic: 222 72% 73%;
+    --question: 34 80% 63%;
+    --answer: 160 42% 56%;
+    --resource: 268 58% 75%;
+    --live: 6 74% 61%;
+    --danger: 6 74% 61%;
+
+    --shadow: 0 0% 0%;
+  }
+
+  * {
+    border-color: hsl(var(--line));
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: hsl(var(--canvas));
+    color: hsl(var(--ink));
+    font-feature-settings: "cv05" 1, "ss01" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: hsl(var(--accent) / 0.18);
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--accent) / 0.55);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Hairline panel — the core surface of the app. */
+  .panel {
+    @apply rounded-lg border border-line bg-surface shadow-card;
+  }
+
+  .hairline {
+    @apply border-line;
+  }
+
+  /* Small uppercase section eyebrow used instead of large headings. */
+  .eyebrow {
+    @apply text-2xs font-medium uppercase tracking-[0.09em] text-faint;
+  }
+
+  .num {
+    @apply font-mono tabular-nums;
+  }
+
+  .row-hover {
+    @apply transition-colors duration-150 hover:bg-ink/[0.035] dark:hover:bg-ink/[0.05];
+  }
+
+  .kbd {
+    @apply inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-sm border border-line bg-canvas px-1 font-mono text-[10px] text-faint;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--line-strong)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--line-strong));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .grid-paper {
+    background-image: radial-gradient(hsl(var(--line-strong)) 0.7px, transparent 0.7px);
+    background-size: 18px 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
