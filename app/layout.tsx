@@ -17,19 +17,19 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cadence — tutoring, recorded properly",
-  description:
-    "A calm workspace for tutors: live session capture, topics, questions, answers and resources — turned into a summary students can actually revise from.",
+  title: "Tutoring",
+  description: "A record of what happened in each tutoring class.",
 };
 
-/** Applies the stored theme before paint so there is no flash. */
+/** Applies the stored theme before paint so there is no flash. Dark is default. */
 const themeScript = `
 try {
-  var t = localStorage.getItem('cadence.theme');
-  if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+  if (localStorage.getItem('theme') !== 'light') {
     document.documentElement.classList.add('dark');
   }
-} catch (e) {}
+} catch (e) {
+  document.documentElement.classList.add('dark');
+}
 `;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

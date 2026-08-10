@@ -27,30 +27,24 @@ export function EndSessionDialog({
   const { endSession, elapsed } = useStore();
   const router = useRouter();
 
-  const unanswered = session.qa.filter((q) => !q.answer).length;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent width="md">
         <DialogHeader
-          title="End this session?"
-          description="Recording and transcription stop, and Cadence drafts a summary you can edit before the student sees it."
+          title="End this class?"
+          description="Recording stops and the write-up happens on its own. You don't need to wait for it."
         />
-        <DialogBody className="space-y-3">
+        <DialogBody>
           <div className="grid grid-cols-4 divide-x divide-line rounded border border-line bg-canvas">
             <Stat label="Length" value={clock(elapsed)} />
             <Stat label="Topics" value={String(session.topics.length)} icon={Tag} />
-            <Stat label="Questions" value={String(session.qa.length)} icon={MessageSquareQuote} />
+            <Stat
+              label="Questions"
+              value={String(session.questions.length)}
+              icon={MessageSquareQuote}
+            />
             <Stat label="Links" value={String(session.resources.length)} icon={Link2} />
           </div>
-
-          {unanswered > 0 ? (
-            <p className="rounded border border-question/25 bg-question/[0.05] px-3 py-2 text-xs leading-relaxed text-ink">
-              {unanswered} question{unanswered > 1 ? "s are" : " is"} still unanswered. You can
-              answer {unanswered > 1 ? "them" : "it"} afterwards — the student will not see the
-              session until you publish it.
-            </p>
-          ) : null}
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
@@ -61,11 +55,11 @@ export function EndSessionDialog({
             onClick={() => {
               endSession();
               onOpenChange(false);
-              router.push(`/teacher/sessions/${session.id}`);
+              router.push("/teacher");
             }}
           >
             <Square className="size-3 fill-current" />
-            End session
+            End class
           </Button>
         </DialogFooter>
       </DialogContent>

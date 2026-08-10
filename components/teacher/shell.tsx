@@ -3,16 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  ChevronRight,
-  LayoutGrid,
-  Menu as MenuIcon,
-  Radio,
-  Users,
-  Waves,
-  X,
-} from "lucide-react";
-import { Wordmark } from "@/components/brand";
+import { ChevronRight, LayoutGrid, Menu as MenuIcon, Radio, Users, Waves, X } from "lucide-react";
+import { AccountMenu } from "@/components/account-menu";
 import { Avatar, Badge, Tooltip } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/lib/store";
@@ -23,19 +15,19 @@ import { StartSessionDialog } from "@/components/teacher/start-session-dialog";
 const nav = [
   { href: "/teacher", label: "Overview", icon: LayoutGrid, exact: true },
   { href: "/teacher/students", label: "Students", icon: Users },
-  { href: "/teacher/sessions", label: "Sessions", icon: Waves },
+  { href: "/teacher/sessions", label: "Classes", icon: Waves },
 ];
 
 export function TeacherShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { students, sessions, liveId, elapsed } = useStore();
+  const { teacher, students, sessions, liveId, elapsed } = useStore();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [startOpen, setStartOpen] = React.useState(false);
 
   React.useEffect(() => setMobileOpen(false), [pathname]);
 
-  /* Global shortcuts: N starts a session, G+S jumps to students. */
+  /* N starts a session from anywhere; "/" jumps to student search. */
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -45,7 +37,6 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
         e.preventDefault();
         setStartOpen(true);
       }
-      /* The students page owns "/" once you are already there. */
       if (e.key === "/" && !e.metaKey && !window.location.pathname.startsWith("/teacher/students")) {
         e.preventDefault();
         router.push("/teacher/students?focus=1");
@@ -56,14 +47,14 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const liveSession = sessions.find((s) => s.id === liveId);
-  const liveStudent = students.find((s) => s.id === liveSession?.studentId);
+  const liveStudent = students.find((s) => s.id === liveSession?.participants[0]);
 
   const recent = React.useMemo(
     () =>
       [...sessions]
         .sort((a, b) => +new Date(b.startedAt) - +new Date(a.startedAt))
-        .slice(0, 5)
-        .map((s) => students.find((st) => st.id === s.studentId))
+        .slice(0, 6)
+        .map((s) => students.find((st) => st.id === s.participants[0]))
         .filter((s, i, arr): s is NonNullable<typeof s> => Boolean(s) && arr.indexOf(s) === i)
         .slice(0, 4),
     [sessions, students]
@@ -74,12 +65,10 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
 
   const sidebar = (
     <div className="flex h-full flex-col gap-1 px-3 py-3">
-      <div className="flex items-center justify-between px-2 py-2">
-        <Link href="/teacher" className="rounded transition-opacity hover:opacity-70">
-          <Wordmark />
-        </Link>
+      <div className="flex items-center justify-between gap-1 py-1">
+        <AccountMenu name={teacher.name} avatarUrl={teacher.avatarUrl} subtitle="Teacher" />
         <button
-          className="grid size-6 place-items-center rounded text-faint hover:bg-ink/[0.06] md:hidden"
+          className="grid size-6 shrink-0 place-items-center rounded text-faint hover:bg-ink/[0.06] md:hidden"
           onClick={() => setMobileOpen(false)}
           aria-label="Close navigation"
         >
@@ -87,7 +76,7 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
-      <div className="px-1 pb-3 pt-1">
+      <div className="px-1 pb-3 pt-2">
         <Button
           variant="primary"
           size="md"
@@ -96,7 +85,7 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
         >
           <span className="flex items-center gap-1.5">
             <Radio className="size-3.5" />
-            Start session
+            Start class
           </span>
           <span className="kbd border-canvas/25 bg-transparent text-canvas/60">N</span>
         </Button>
@@ -125,26 +114,28 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
         ))}
       </nav>
 
-      <div className="mt-6 space-y-1 px-2">
-        <p className="eyebrow px-0.5">Recent students</p>
-        <div className="space-y-px pt-1">
-          {recent.map((s) => (
-            <Link
-              key={s.id}
-              href={`/teacher/students/${s.id}`}
-              className={cn(
-                "flex items-center gap-2 rounded px-1 py-1 text-[13px] transition-colors",
-                pathname === `/teacher/students/${s.id}`
-                  ? "bg-ink/[0.06] text-ink"
-                  : "text-muted hover:bg-ink/[0.04] hover:text-ink"
-              )}
-            >
-              <Avatar name={s.name} color={s.color} size="xs" />
-              <span className="truncate">{s.name}</span>
-            </Link>
-          ))}
+      {recent.length ? (
+        <div className="mt-6 space-y-1 px-2">
+          <p className="eyebrow px-0.5">Recent students</p>
+          <div className="space-y-px pt-1">
+            {recent.map((s) => (
+              <Link
+                key={s.id}
+                href={`/teacher/students/${s.id}`}
+                className={cn(
+                  "flex items-center gap-2 rounded px-1 py-1 text-[13px] transition-colors",
+                  pathname === `/teacher/students/${s.id}`
+                    ? "bg-ink/[0.06] text-ink"
+                    : "text-muted hover:bg-ink/[0.04] hover:text-ink"
+                )}
+              >
+                <Avatar name={s.name} color={s.color} src={s.avatarUrl} size="xs" />
+                <span className="truncate">{s.name}</span>
+              </Link>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="mt-auto px-1">
         {liveSession && liveStudent ? (
@@ -158,30 +149,23 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-xs font-medium text-ink">
-                {liveStudent.name.split(" ")[0]} · live
+                {liveStudent.name.split(" ")[0]} · recording
               </span>
               <span className="num block text-2xs text-live">{clock(elapsed)}</span>
             </span>
             <ChevronRight className="size-3.5 text-live/60 transition-transform group-hover:translate-x-0.5" />
           </Link>
-        ) : (
-          <div className="flex items-center gap-2 rounded border border-dashed border-line px-2.5 py-2 text-2xs text-faint">
-            <span className="size-2 rounded-full border border-line-strong" />
-            No session in progress
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
 
   return (
     <div className="flex min-h-screen">
-      {/* Desktop rail */}
       <aside className="sticky top-0 hidden h-screen w-[228px] shrink-0 border-r border-line bg-surface/60 md:block">
         {sidebar}
       </aside>
 
-      {/* Mobile drawer */}
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 md:hidden">
           <div
@@ -203,7 +187,6 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
           >
             <MenuIcon className="size-4" />
           </button>
-          <Wordmark />
           <div className="ml-auto">
             {liveSession ? (
               <Link href={`/session/${liveSession.id}`}>
@@ -213,7 +196,7 @@ export function TeacherShell({ children }: { children: React.ReactNode }) {
                 </Badge>
               </Link>
             ) : (
-              <Tooltip label="Start a session" shortcut="N">
+              <Tooltip label="Start a class" shortcut="N">
                 <Button size="sm" variant="primary" onClick={() => setStartOpen(true)}>
                   <Radio className="size-3.5" />
                   Start

@@ -13,20 +13,21 @@ const modes: Array<{ id: Mode; label: string; icon: typeof Tag; accent: string }
   { id: "topic", label: "Topic", icon: Tag, accent: "text-topic" },
   { id: "question", label: "Question", icon: MessageSquareQuote, accent: "text-question" },
   { id: "answer", label: "Answer", icon: CornerDownRight, accent: "text-answer" },
-  { id: "resource", label: "Resource", icon: Link2, accent: "text-resource" },
+  { id: "resource", label: "Link", icon: Link2, accent: "text-resource" },
 ];
 
 /**
- * Always-available capture bar. The teacher is talking while using this, so it
- * is one field, four modes, and no dialogs.
+ * Optional capture bar. Everything here is detected automatically — this exists
+ * only for the moments the teacher wants to pin something down themselves, and
+ * is never part of the normal workflow.
  */
 export function Composer({ session }: { session: Session }) {
-  const { addTopic, addQuestion, updateQA, addResource } = useStore();
+  const { addTopic, addQuestion, updateQuestion, addResource } = useStore();
   const [mode, setMode] = React.useState<Mode>("topic");
   const [value, setValue] = React.useState("");
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const pendingQuestion = [...session.qa].reverse().find((q) => !q.answer);
+  const pendingQuestion = [...session.questions].reverse().find((q) => !q.answer);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -54,10 +55,10 @@ export function Composer({ session }: { session: Session }) {
     if (mode === "topic") addTopic(session.id, text);
     if (mode === "question") addQuestion(session.id, text);
     if (mode === "answer" && pendingQuestion)
-      updateQA(session.id, pendingQuestion.id, { answer: text });
+      updateQuestion(session.id, pendingQuestion.id, { answer: text });
     if (mode === "resource") {
       const url = text.startsWith("http") ? text : `https://${text}`;
-      addResource(session.id, { title: hostOf(url), url, kind: "link" });
+      addResource(session.id, { title: hostOf(url), url });
     }
     setValue("");
   };
@@ -67,12 +68,12 @@ export function Composer({ session }: { session: Session }) {
 
   const placeholder =
     mode === "topic"
-      ? "What are you covering right now?"
+      ? "Note a topic yourself"
       : mode === "question"
-        ? "What did they ask?"
+        ? "Note a question yourself"
         : mode === "answer"
           ? pendingQuestion
-            ? `Answering: “${pendingQuestion.question.slice(0, 46)}${pendingQuestion.question.length > 46 ? "…" : ""}”`
+            ? `Answering: “${pendingQuestion.text.slice(0, 46)}${pendingQuestion.text.length > 46 ? "…" : ""}”`
             : "No open question to answer"
           : "Paste a link to share";
 
@@ -93,9 +94,7 @@ export function Composer({ session }: { session: Session }) {
             title={`${m.label} — ⌘${i + 1}`}
             className={cn(
               "flex h-6 items-center gap-1.5 rounded-sm px-2 text-2xs font-medium transition-all duration-150",
-              mode === m.id
-                ? "bg-surface text-ink shadow-card"
-                : "text-faint hover:text-muted"
+              mode === m.id ? "bg-surface text-ink shadow-card" : "text-faint hover:text-muted"
             )}
           >
             <m.icon className={cn("size-3", mode === m.id ? m.accent : "")} />
@@ -124,7 +123,7 @@ export function Composer({ session }: { session: Session }) {
       </div>
 
       <span className="hidden shrink-0 items-center gap-1 text-2xs text-faint lg:flex">
-        <span className="kbd">C</span> to capture
+        <span className="kbd">C</span> optional
       </span>
       <span className={cn("size-1.5 shrink-0 rounded-full", active.accent, "bg-current")} />
     </form>

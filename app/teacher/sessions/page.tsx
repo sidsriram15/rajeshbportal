@@ -10,7 +10,7 @@ import { useStore } from "@/lib/store";
 import { relativeDay } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type Filter = "all" | "draft" | "published";
+type Filter = "all" | "attention" | "processing";
 
 export default function SessionsPage() {
   const { sessions, students } = useStore();
@@ -22,15 +22,19 @@ export default function SessionsPage() {
     return [...sessions]
       .sort((a, b) => +new Date(b.startedAt) - +new Date(a.startedAt))
       .filter((s) => {
-        const student = students.find((x) => x.id === s.studentId);
+        const student = students.find((x) => x.id === s.participants[0]);
         const matchesQuery =
           !q ||
-          [s.title, s.subject, student?.name ?? "", ...s.topics.map((t) => t.label)]
+          [student?.name ?? "", ...s.topics.map((t) => t.label), s.summary ?? ""]
             .join(" ")
             .toLowerCase()
             .includes(q);
         const matchesFilter =
-          filter === "all" ? true : filter === "draft" ? s.status !== "published" : s.status === "published";
+          filter === "all"
+            ? true
+            : filter === "attention"
+              ? s.status === "needs_attention" || s.status === "failed"
+              : s.status === "processing" || s.status === "recording";
         return matchesQuery && matchesFilter;
       });
   }, [sessions, students, query, filter]);
@@ -44,12 +48,17 @@ export default function SessionsPage() {
     return Array.from(map.entries());
   }, [rows]);
 
-  const drafts = sessions.filter((s) => s.status !== "published").length;
+  const needsAttention = sessions.filter(
+    (s) => s.status === "needs_attention" || s.status === "failed"
+  ).length;
+  const inFlight = sessions.filter(
+    (s) => s.status === "processing" || s.status === "recording"
+  ).length;
 
   return (
     <>
       <PageHeader
-        title="Sessions"
+        title="Classes"
         meta={
           <Badge tone="outline" className="num">
             {sessions.length}
@@ -61,7 +70,7 @@ export default function SessionsPage() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search sessions and topics…"
+              placeholder="Search topics and students…"
               className="pl-8"
             />
           </div>
@@ -73,8 +82,8 @@ export default function SessionsPage() {
           {(
             [
               ["all", `All ${sessions.length}`],
-              ["draft", `Needs review ${drafts}`],
-              ["published", "Published"],
+              ["attention", `Needs attention ${needsAttention}`],
+              ["processing", `In progress ${inFlight}`],
             ] as Array<[Filter, string]>
           ).map(([id, label]) => (
             <button
@@ -105,8 +114,10 @@ export default function SessionsPage() {
                   <SessionRow
                     key={s.id}
                     session={s}
-                    student={students.find((x) => x.id === s.studentId)}
-                    href={s.status === "live" ? `/session/${s.id}` : `/teacher/sessions/${s.id}`}
+                    student={students.find((x) => x.id === s.participants[0])}
+                    href={
+                      s.status === "recording" ? `/session/${s.id}` : `/teacher/sessions/${s.id}`
+                    }
                   />
                 ))}
               </div>
@@ -117,11 +128,11 @@ export default function SessionsPage() {
             <div className="panel">
               <EmptyState
                 icon={Waves}
-                title={query ? `Nothing matches “${query}”` : "No sessions here"}
+                title={query ? `Nothing matches “${query}”` : "No classes here"}
                 description={
                   query
-                    ? "Search covers session titles, subjects, students and captured topics."
-                    : "Sessions appear here once you have taught them."
+                    ? "Search covers students, detected topics and summaries."
+                    : "Classes appear here once you have taught them."
                 }
               />
             </div>

@@ -1,22 +1,9 @@
-import { FileText, Link2, PenLine, PlayCircle } from "lucide-react";
-import type { Resource } from "@/lib/types";
+import { FileText, Link2 } from "lucide-react";
+import type { ResourceKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const map = {
-  link: Link2,
-  video: PlayCircle,
-  doc: FileText,
-  practice: PenLine,
-} as const;
-
-export function ResourceIcon({
-  kind,
-  className,
-}: {
-  kind: Resource["kind"];
-  className?: string;
-}) {
-  const Icon = map[kind] ?? Link2;
+export function ResourceIcon({ kind, className }: { kind: ResourceKind; className?: string }) {
+  const Icon = kind === "pdf" ? FileText : Link2;
   return (
     <span
       className={cn(

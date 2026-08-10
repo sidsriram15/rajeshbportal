@@ -1,22 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { HelpCircle, Link2, Radio, Tags } from "lucide-react";
+import { AlertTriangle, HelpCircle, Link2, Loader2, Radio, Tags } from "lucide-react";
 import { Avatar, Badge } from "@/components/ui/primitives";
-import { relativeDay, timeLabel } from "@/lib/format";
+import { durationLabel, relativeDay, timeLabel, topicLine } from "@/lib/format";
 import type { Session, Student } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function StatusBadge({ status }: { status: Session["status"] }) {
-  if (status === "live")
-    return (
-      <Badge tone="live">
-        <span className="size-1.5 animate-pulse rounded-full bg-live" />
-        Live
-      </Badge>
-    );
-  if (status === "draft") return <Badge tone="question">Draft summary</Badge>;
-  return <Badge tone="neutral">Published</Badge>;
+  switch (status) {
+    case "recording":
+      return (
+        <Badge tone="live">
+          <span className="size-1.5 animate-pulse rounded-full bg-live" />
+          Recording
+        </Badge>
+      );
+    case "processing":
+      return (
+        <Badge tone="outline">
+          <Loader2 className="size-2.5 animate-spin" />
+          Processing
+        </Badge>
+      );
+    case "needs_attention":
+      return (
+        <Badge tone="question">
+          <AlertTriangle className="size-2.5" />
+          Needs attention
+        </Badge>
+      );
+    case "failed":
+      return <Badge tone="live">Failed</Badge>;
+    default:
+      return null;
+  }
 }
 
 export function SessionRow({
@@ -32,7 +50,8 @@ export function SessionRow({
   showStudent?: boolean;
   className?: string;
 }) {
-  const unanswered = session.qa.filter((q) => !q.answer).length;
+  const topics = topicLine(session);
+  const unanswered = session.questions.filter((q) => !q.answer).length;
 
   return (
     <Link
@@ -43,7 +62,7 @@ export function SessionRow({
       )}
     >
       {showStudent && student ? (
-        <Avatar name={student.name} color={student.color} size="sm" />
+        <Avatar name={student.name} color={student.color} src={student.avatarUrl} size="sm" />
       ) : (
         <span
           className="mt-px size-1.5 shrink-0 rounded-full"
@@ -53,20 +72,20 @@ export function SessionRow({
 
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <p className="truncate text-[13px] font-medium text-ink">{session.title}</p>
-          {session.status !== "published" ? <StatusBadge status={session.status} /> : null}
+          <p className="truncate text-[13px] font-medium text-ink">
+            {topics || (session.status === "recording" ? "In progress" : "No topics detected")}
+          </p>
+          <StatusBadge status={session.status} />
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-2xs text-faint">
           {showStudent && student ? <span className="text-muted">{student.name}</span> : null}
-          <span>{session.subject}</span>
-          <span aria-hidden>·</span>
           <span>
             {relativeDay(session.startedAt)}, {timeLabel(session.startedAt)}
           </span>
-          {session.status !== "live" ? (
+          {session.status !== "recording" ? (
             <>
               <span aria-hidden>·</span>
-              <span className="num">{session.durationMin}m</span>
+              <span className="num">{durationLabel(session.durationSeconds)}</span>
             </>
           ) : null}
         </div>
@@ -79,16 +98,16 @@ export function SessionRow({
         </span>
         <span className="hidden items-center gap-1 sm:flex" title="Questions">
           <HelpCircle className="size-3 text-question/70" />
-          <span className="num">{session.qa.length}</span>
+          <span className="num">{session.questions.length}</span>
         </span>
         <span className="hidden items-center gap-1 md:flex" title="Resources">
           <Link2 className="size-3 text-resource/70" />
           <span className="num">{session.resources.length}</span>
         </span>
-        {unanswered > 0 && session.status !== "live" ? (
-          <Badge tone="question">{unanswered} unanswered</Badge>
+        {unanswered > 0 && session.status === "ready" ? (
+          <Badge tone="outline">{unanswered} unanswered</Badge>
         ) : null}
-        {session.status === "live" ? <Radio className="size-3.5 text-live" /> : null}
+        {session.status === "recording" ? <Radio className="size-3.5 text-live" /> : null}
       </div>
     </Link>
   );

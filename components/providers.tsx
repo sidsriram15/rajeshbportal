@@ -3,17 +3,17 @@
 import * as React from "react";
 import { TooltipProvider } from "@/components/ui/primitives";
 import { StoreProvider } from "@/lib/store";
-import { PortalSwitcher } from "@/components/portal-switcher";
+import { PreviewSwitcher } from "@/components/preview-switcher";
 
 const ThemeContext = React.createContext<{ dark: boolean; toggle: () => void }>({
-  dark: false,
+  dark: true,
   toggle: () => {},
 });
 
 export const useTheme = () => React.useContext(ThemeContext);
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [dark, setDark] = React.useState(false);
+  const [dark, setDark] = React.useState(true);
 
   React.useEffect(() => {
     setDark(document.documentElement.classList.contains("dark"));
@@ -23,7 +23,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     setDark((prev) => {
       const next = !prev;
       document.documentElement.classList.toggle("dark", next);
-      window.localStorage.setItem("cadence.theme", next ? "dark" : "light");
+      window.localStorage.setItem("theme", next ? "dark" : "light");
       return next;
     });
   }, []);
@@ -33,7 +33,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <StoreProvider>
         <TooltipProvider delayDuration={250} skipDelayDuration={300}>
           {children}
-          <PortalSwitcher />
+          <PreviewSwitcher />
         </TooltipProvider>
       </StoreProvider>
     </ThemeContext.Provider>

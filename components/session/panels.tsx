@@ -12,13 +12,13 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { Badge, EmptyState, Meter } from "@/components/ui/primitives";
+import { EmptyState, Meter } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { ResourceIcon } from "@/components/session/resource-icon";
 import { useStore } from "@/lib/store";
 import { hostOf, stamp } from "@/lib/format";
-import type { Resource, Session } from "@/lib/types";
+import type { Session } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /* ------------------------------------------------------------------ Topics */
@@ -30,7 +30,7 @@ export function TopicsPanel({ session, editable }: { session: Session; editable:
   const [adding, setAdding] = React.useState("");
 
   if (session.topics.length === 0 && !editable)
-    return <EmptyState compact icon={Tag} title="No topics recorded" />;
+    return <EmptyState compact icon={Tag} title="No topics detected" />;
 
   return (
     <div className="space-y-1">
@@ -47,7 +47,7 @@ export function TopicsPanel({ session, editable }: { session: Session; editable:
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && draft.trim()) {
-                    updateTopic(session.id, t.id, { label: draft.trim() });
+                    updateTopic(session.id, t.id, draft.trim());
                     setEditingId(null);
                   }
                   if (e.key === "Escape") setEditingId(null);
@@ -58,7 +58,7 @@ export function TopicsPanel({ session, editable }: { session: Session; editable:
                   size="xs"
                   variant="primary"
                   onClick={() => {
-                    if (draft.trim()) updateTopic(session.id, t.id, { label: draft.trim() });
+                    if (draft.trim()) updateTopic(session.id, t.id, draft.trim());
                     setEditingId(null);
                   }}
                 >
@@ -100,11 +100,17 @@ export function TopicsPanel({ session, editable }: { session: Session; editable:
                 ) : null}
               </div>
               <div className="mt-1 flex items-center gap-2 pl-3.5">
-                <span className="num text-2xs text-faint">{stamp(t.at)}</span>
-                <Meter value={t.confidence} tone="topic" ticks={6} />
-                <span className="text-2xs text-faint">
-                  {t.source === "manual" ? "added by you" : `${Math.round(t.confidence * 100)}%`}
-                </span>
+                <span className="num text-2xs text-faint">{stamp(t.firstAtMs)}</span>
+                {t.origin === "ai" ? (
+                  <>
+                    <Meter value={t.confidence} tone="topic" ticks={6} />
+                    <span className="text-2xs text-faint">
+                      {Math.round(t.confidence * 100)}% confident
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-2xs text-faint">added by you</span>
+                )}
               </div>
             </>
           )}
@@ -135,7 +141,7 @@ export function TopicsPanel({ session, editable }: { session: Session; editable:
 
       {session.topics.length === 0 ? (
         <p className="px-2 py-6 text-center text-xs text-faint">
-          Topics will appear here as they come up.
+          Topics are detected from the lesson as it goes.
         </p>
       ) : null}
     </div>
@@ -145,36 +151,38 @@ export function TopicsPanel({ session, editable }: { session: Session; editable:
 /* --------------------------------------------------------------- Questions */
 
 export function QuestionsPanel({ session, editable }: { session: Session; editable: boolean }) {
-  const { updateQA, removeQA, addQuestion } = useStore();
+  const { updateQuestion, removeQuestion, addQuestion } = useStore();
   const [openId, setOpenId] = React.useState<string | null>(null);
   const [answerDraft, setAnswerDraft] = React.useState("");
   const [adding, setAdding] = React.useState("");
 
-  if (session.qa.length === 0 && !editable)
+  if (session.questions.length === 0 && !editable)
     return <EmptyState compact icon={MessageSquareQuote} title="No questions asked" />;
 
   return (
     <div className="space-y-1.5">
-      {session.qa.map((q) => {
+      {session.questions.map((q) => {
         const open = openId === q.id;
         return (
           <div
             key={q.id}
             className={cn(
               "group rounded border px-2.5 py-2 transition-colors",
-              q.answer ? "border-transparent hover:border-line" : "border-question/25 bg-question/[0.04]"
+              q.answer
+                ? "border-transparent hover:border-line"
+                : "border-question/25 bg-question/[0.04]"
             )}
           >
             <div className="flex items-start gap-2">
-              <span className="num shrink-0 pt-px text-2xs text-faint">{stamp(q.at)}</span>
-              <p className="min-w-0 flex-1 text-[13px] leading-snug text-ink">{q.question}</p>
+              <span className="num shrink-0 pt-px text-2xs text-faint">{stamp(q.askedAtMs)}</span>
+              <p className="min-w-0 flex-1 text-[13px] leading-snug text-ink">{q.text}</p>
               {editable ? (
                 <Button
                   size="iconSm"
                   variant="ghost"
                   aria-label="Delete question"
                   className="shrink-0 opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                  onClick={() => removeQA(session.id, q.id)}
+                  onClick={() => removeQuestion(session.id, q.id)}
                 >
                   <Trash2 />
                 </Button>
@@ -198,7 +206,7 @@ export function QuestionsPanel({ session, editable }: { session: Session; editab
                     placeholder="What did you tell them?"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                        updateQA(session.id, q.id, { answer: answerDraft.trim() });
+                        updateQuestion(session.id, q.id, { answer: answerDraft.trim() });
                         setOpenId(null);
                       }
                       if (e.key === "Escape") setOpenId(null);
@@ -210,7 +218,7 @@ export function QuestionsPanel({ session, editable }: { session: Session; editab
                       variant="primary"
                       disabled={!answerDraft.trim()}
                       onClick={() => {
-                        updateQA(session.id, q.id, { answer: answerDraft.trim() });
+                        updateQuestion(session.id, q.id, { answer: answerDraft.trim() });
                         setOpenId(null);
                       }}
                     >
@@ -232,7 +240,7 @@ export function QuestionsPanel({ session, editable }: { session: Session; editab
                     setOpenId(q.id);
                   }}
                 >
-                  {q.answer ? "Edit answer" : "Add your answer →"}
+                  {q.answer ? "Edit answer" : "Add the answer →"}
                 </button>
               )
             ) : null}
@@ -262,9 +270,9 @@ export function QuestionsPanel({ session, editable }: { session: Session; editab
         </form>
       ) : null}
 
-      {session.qa.length === 0 ? (
+      {session.questions.length === 0 ? (
         <p className="px-2 py-6 text-center text-xs text-faint">
-          Questions your student asks will land here.
+          Questions your student asks are picked up automatically.
         </p>
       ) : null}
     </div>
@@ -273,43 +281,35 @@ export function QuestionsPanel({ session, editable }: { session: Session; editab
 
 /* --------------------------------------------------------------- Resources */
 
-const KINDS: Resource["kind"][] = ["link", "doc", "video", "practice"];
-
 export function ResourcesPanel({ session, editable }: { session: Session; editable: boolean }) {
   const { addResource, removeResource } = useStore();
   const [open, setOpen] = React.useState(false);
   const [title, setTitle] = React.useState("");
   const [url, setUrl] = React.useState("");
-  const [kind, setKind] = React.useState<Resource["kind"]>("link");
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
     const normalised = url.startsWith("http") ? url.trim() : `https://${url.trim()}`;
-    addResource(session.id, {
-      title: title.trim() || hostOf(normalised),
-      url: normalised,
-      kind,
-    });
+    addResource(session.id, { title: title.trim() || hostOf(normalised), url: normalised });
     setTitle("");
     setUrl("");
-    setKind("link");
     setOpen(false);
   };
 
   return (
     <div className="space-y-1">
       {session.resources.map((r) => (
-        <div key={r.id} className="group flex items-center gap-2 rounded px-1.5 py-1.5 transition-colors hover:bg-surface">
+        <div
+          key={r.id}
+          className="group flex items-center gap-2 rounded px-1.5 py-1.5 transition-colors hover:bg-surface"
+        >
           <ResourceIcon kind={r.kind} />
-          <a
-            href={r.url}
-            target="_blank"
-            rel="noreferrer"
-            className="min-w-0 flex-1"
-          >
+          <a href={r.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1">
             <span className="block truncate text-[13px] text-ink hover:underline">{r.title}</span>
-            <span className="block truncate text-2xs text-faint">{hostOf(r.url)}</span>
+            {r.url ? (
+              <span className="block truncate text-2xs text-faint">{hostOf(r.url)}</span>
+            ) : null}
           </a>
           {editable ? (
             <Button
@@ -329,7 +329,7 @@ export function ResourcesPanel({ session, editable }: { session: Session; editab
 
       {session.resources.length === 0 && !open ? (
         <p className="px-2 py-6 text-center text-xs text-faint">
-          Links you share during the lesson show up here for the student.
+          Anything you share here reaches the student with the class.
         </p>
       ) : null}
 
@@ -349,26 +349,9 @@ export function ResourcesPanel({ session, editable }: { session: Session; editab
               placeholder="Label (optional)"
               className="h-7 text-xs"
             />
-            <div className="flex flex-wrap gap-1">
-              {KINDS.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setKind(k)}
-                  className={cn(
-                    "h-6 rounded border px-2 text-2xs capitalize transition-colors",
-                    kind === k
-                      ? "border-ink bg-ink text-canvas"
-                      : "border-line text-muted hover:text-ink"
-                  )}
-                >
-                  {k}
-                </button>
-              ))}
-            </div>
             <div className="flex gap-1.5 pt-0.5">
               <Button size="xs" variant="primary" disabled={!url.trim()}>
-                Add resource
+                Add link
               </Button>
               <Button size="xs" variant="ghost" type="button" onClick={() => setOpen(false)}>
                 Cancel
@@ -386,13 +369,5 @@ export function ResourcesPanel({ session, editable }: { session: Session; editab
         )
       ) : null}
     </div>
-  );
-}
-
-export function PanelCount({ n, tone }: { n: number; tone: "topic" | "question" | "resource" }) {
-  return (
-    <Badge tone={tone} className="num">
-      {n}
-    </Badge>
   );
 }

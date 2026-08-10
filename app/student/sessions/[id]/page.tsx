@@ -12,35 +12,41 @@ import {
   Lock,
   Tag,
 } from "lucide-react";
-import { Badge, EmptyState } from "@/components/ui/primitives";
+import { EmptyState } from "@/components/ui/primitives";
 import { ResourceIcon } from "@/components/session/resource-icon";
-import { useStore, useStudentSessions } from "@/lib/store";
-import { dateLabel, hostOf, stamp } from "@/lib/format";
+import { useStore, useVisibleStudentSessions } from "@/lib/store";
+import { dateLabel, durationLabel, hostOf, stamp } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export default function StudentSessionView({ params }: { params: { id: string } }) {
-  const { sessions, students, viewerId } = useStore();
+  const { sessions, students, viewerStudentId } = useStore();
   const session = sessions.find((s) => s.id === params.id);
-  const student = students.find((s) => s.id === viewerId) ?? students[0];
-  const siblings = useStudentSessions(student?.id).filter((s) => s.status === "published");
-  const [done, setDone] = React.useState<Set<number>>(new Set());
+  const student = students.find((s) => s.id === viewerStudentId) ?? students[0];
+  const siblings = useVisibleStudentSessions(student?.id);
+  const [done, setDone] = React.useState<Set<string>>(new Set());
 
   if (!session) notFound();
 
-  /* Students only ever see their own published sessions. */
-  if (session.studentId !== student?.id || session.status !== "published") {
+  /* Authorization lives in the database from Phase 2; this is a UI guard only. */
+  const allowed =
+    student !== undefined &&
+    session.participants.includes(student.id) &&
+    session.publishedAt !== null &&
+    session.status === "ready";
+
+  if (!allowed) {
     return (
       <div className="panel">
         <EmptyState
           icon={Lock}
-          title="This lesson isn't available"
-          description="It either belongs to another student or your tutor hasn't published it yet."
+          title="This class isn't available"
+          description="It either belongs to someone else, or it hasn't finished being written up."
           action={
             <Link
               href="/student"
               className="text-2xs text-accent underline-offset-4 hover:underline"
             >
-              Back to my lessons
+              Back to my classes
             </Link>
           }
         />
@@ -49,15 +55,17 @@ export default function StudentSessionView({ params }: { params: { id: string } 
   }
 
   const index = siblings.findIndex((s) => s.id === session.id);
-  const prev = siblings[index + 1];
+  const previous = siblings[index + 1];
   const next = siblings[index - 1];
-  const answered = session.qa.filter((q) => q.answer);
+  const answered = session.questions.filter((q) => q.answer && !q.withheld);
+  const keyPoints = session.notes.filter((n) => n.kind === "key_point");
+  const practice = session.notes.filter((n) => n.kind === "practice");
 
-  const toggle = (i: number) =>
+  const toggle = (id: string) =>
     setDone((prev) => {
       const copy = new Set(prev);
-      if (copy.has(i)) copy.delete(i);
-      else copy.add(i);
+      if (copy.has(id)) copy.delete(id);
+      else copy.add(id);
       return copy;
     });
 
@@ -69,29 +77,27 @@ export default function StudentSessionView({ params }: { params: { id: string } 
           className="inline-flex items-center gap-1 text-2xs text-faint transition-colors hover:text-ink"
         >
           <ArrowLeft className="size-3" />
-          My lessons
+          My classes
         </Link>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="neutral">{session.subject}</Badge>
-          <span className="text-2xs text-faint">
-            {dateLabel(session.startedAt)} · <span className="num">{session.durationMin} min</span>
-          </span>
-        </div>
         <h1 className="text-[22px] font-semibold leading-tight tracking-[-0.022em] text-ink">
-          {session.title}
+          {dateLabel(session.startedAt)}
         </h1>
+        <p className="num text-2xs text-faint">{durationLabel(session.durationSeconds)}</p>
       </header>
 
-      {/* Summary — the reason they came. */}
-      <section className="space-y-3.5">
-        {session.summary.split("\n\n").filter(Boolean).map((p, i) => (
-          <p key={i} className="text-[15px] leading-[1.75] text-ink/90">
-            {p}
-          </p>
-        ))}
-      </section>
+      {session.summary ? (
+        <section className="space-y-3.5">
+          {session.summary
+            .split("\n\n")
+            .filter(Boolean)
+            .map((p, i) => (
+              <p key={i} className="text-[15px] leading-[1.75] text-ink/90">
+                {p}
+              </p>
+            ))}
+        </section>
+      ) : null}
 
-      {/* Topics */}
       {session.topics.length ? (
         <section className="space-y-2.5">
           <SectionLabel icon={Tag}>What we covered</SectionLabel>
@@ -108,7 +114,6 @@ export default function StudentSessionView({ params }: { params: { id: string } 
         </section>
       ) : null}
 
-      {/* Q&A */}
       {answered.length ? (
         <section className="space-y-2.5">
           <SectionLabel>Your questions</SectionLabel>
@@ -120,9 +125,11 @@ export default function StudentSessionView({ params }: { params: { id: string } 
                 className="group rounded-lg border border-line bg-surface shadow-card"
               >
                 <summary className="flex cursor-pointer list-none items-start gap-2.5 px-4 py-3 [&::-webkit-details-marker]:hidden">
-                  <span className="num mt-px shrink-0 text-2xs text-faint">{stamp(q.at)}</span>
+                  <span className="num mt-px shrink-0 text-2xs text-faint">
+                    {stamp(q.askedAtMs)}
+                  </span>
                   <span className="flex-1 text-[14px] font-medium leading-snug text-ink">
-                    {q.question}
+                    {q.text}
                   </span>
                   <span className="mt-0.5 shrink-0 text-2xs text-faint transition-transform group-open:rotate-90">
                     ›
@@ -137,10 +144,22 @@ export default function StudentSessionView({ params }: { params: { id: string } 
         </section>
       ) : null}
 
-      {/* Resources */}
+      {keyPoints.length ? (
+        <section className="space-y-2.5">
+          <SectionLabel>Key points</SectionLabel>
+          <ul className="panel divide-y divide-line">
+            {keyPoints.map((n) => (
+              <li key={n.id} className="px-4 py-2.5 text-[13px] leading-relaxed text-ink">
+                {n.text}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {session.resources.length ? (
         <section className="space-y-2.5">
-          <SectionLabel>Links your tutor shared</SectionLabel>
+          <SectionLabel>Resources</SectionLabel>
           <div className="panel divide-y divide-line">
             {session.resources.map((r) => (
               <a
@@ -153,10 +172,9 @@ export default function StudentSessionView({ params }: { params: { id: string } 
                 <ResourceIcon kind={r.kind} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] text-ink">{r.title}</span>
-                  <span className="block truncate text-2xs text-faint">
-                    {hostOf(r.url)}
-                    {r.note ? ` · ${r.note}` : ""}
-                  </span>
+                  {r.url ? (
+                    <span className="block truncate text-2xs text-faint">{hostOf(r.url)}</span>
+                  ) : null}
                 </span>
                 <ExternalLink className="size-3.5 shrink-0 text-faint" />
               </a>
@@ -165,29 +183,28 @@ export default function StudentSessionView({ params }: { params: { id: string } 
         </section>
       ) : null}
 
-      {/* Practice */}
-      {session.homework.length ? (
+      {practice.length ? (
         <section className="space-y-2.5">
-          <SectionLabel>Practice before next lesson</SectionLabel>
+          <SectionLabel>Practice / next steps</SectionLabel>
           <ul className="panel divide-y divide-line">
-            {session.homework.map((h, i) => (
-              <li key={h}>
+            {practice.map((n) => (
+              <li key={n.id}>
                 <button
-                  onClick={() => toggle(i)}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left row-hover"
+                  onClick={() => toggle(n.id)}
+                  className="flex w-full items-start gap-2.5 px-4 py-2.5 text-left row-hover"
                 >
-                  {done.has(i) ? (
-                    <CheckCircle2 className="size-4 shrink-0 text-answer" />
+                  {done.has(n.id) ? (
+                    <CheckCircle2 className="mt-px size-4 shrink-0 text-answer" />
                   ) : (
-                    <Circle className="size-4 shrink-0 text-line-strong" />
+                    <Circle className="mt-px size-4 shrink-0 text-line-strong" />
                   )}
                   <span
                     className={cn(
-                      "text-[13px] transition-colors",
-                      done.has(i) ? "text-faint line-through" : "text-ink"
+                      "text-[13px] leading-snug transition-colors",
+                      done.has(n.id) ? "text-faint line-through" : "text-ink"
                     )}
                   >
-                    {h}
+                    {n.text}
                   </span>
                 </button>
               </li>
@@ -199,17 +216,18 @@ export default function StudentSessionView({ params }: { params: { id: string } 
         </section>
       ) : null}
 
-      {/* Pagination */}
       <nav className="flex items-stretch gap-2 border-t border-line pt-5">
-        {prev ? (
+        {previous ? (
           <Link
-            href={`/student/sessions/${prev.id}`}
+            href={`/student/sessions/${previous.id}`}
             className="group flex flex-1 items-center gap-2.5 rounded-lg border border-line bg-surface p-3 shadow-card transition-colors hover:border-line-strong"
           >
             <ArrowLeft className="size-3.5 shrink-0 text-faint transition-transform group-hover:-translate-x-0.5" />
             <span className="min-w-0">
-              <span className="block text-2xs text-faint">Previous lesson</span>
-              <span className="block truncate text-[13px] text-ink">{prev.title}</span>
+              <span className="block text-2xs text-faint">Previous class</span>
+              <span className="block truncate text-[13px] text-ink">
+                {dateLabel(previous.startedAt)}
+              </span>
             </span>
           </Link>
         ) : (
@@ -221,8 +239,10 @@ export default function StudentSessionView({ params }: { params: { id: string } 
             className="group flex flex-1 items-center justify-end gap-2.5 rounded-lg border border-line bg-surface p-3 text-right shadow-card transition-colors hover:border-line-strong"
           >
             <span className="min-w-0">
-              <span className="block text-2xs text-faint">Next lesson</span>
-              <span className="block truncate text-[13px] text-ink">{next.title}</span>
+              <span className="block text-2xs text-faint">Next class</span>
+              <span className="block truncate text-[13px] text-ink">
+                {dateLabel(next.startedAt)}
+              </span>
             </span>
             <ArrowRight className="size-3.5 shrink-0 text-faint transition-transform group-hover:translate-x-0.5" />
           </Link>

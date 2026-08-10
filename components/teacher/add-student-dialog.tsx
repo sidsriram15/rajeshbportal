@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { UserPlus } from "lucide-react";
+import { RefreshCw, UserPlus } from "lucide-react";
 import {
   Dialog,
   DialogBody,
@@ -11,19 +11,22 @@ import {
   DialogHeader,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Textarea } from "@/components/ui/input";
+import { Field, Input } from "@/components/ui/input";
 import { useStore } from "@/lib/store";
-import type { Subject } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
-const SUBJECTS: Subject[] = [
-  "Mathematics",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  "Computer Science",
-  "English",
-];
+/** Suggests a login handle from the name — the teacher can always overwrite it. */
+function suggestUsername(name: string) {
+  const parts = name.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0].replace(/[^a-z0-9.]/g, "");
+  return `${parts[0]}.${parts[parts.length - 1][0]}`.replace(/[^a-z0-9.]/g, "");
+}
+
+function generatePassword() {
+  const words = ["river", "amber", "cedar", "quartz", "meadow", "harbor", "lantern", "willow"];
+  const w = words[Math.floor(Math.random() * words.length)];
+  return `${w}-${Math.floor(1000 + Math.random() * 9000)}`;
+}
 
 export function AddStudentDialog({
   open,
@@ -32,39 +35,40 @@ export function AddStudentDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const { addStudent } = useStore();
+  const { addStudent, students } = useStore();
   const router = useRouter();
 
   const [name, setName] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [grade, setGrade] = React.useState("Grade 11");
-  const [cadence, setCadence] = React.useState("");
-  const [subjects, setSubjects] = React.useState<Subject[]>([]);
-  const [focus, setFocus] = React.useState("");
+  const [username, setUsername] = React.useState("");
+  const [usernameTouched, setUsernameTouched] = React.useState(false);
+  const [password, setPassword] = React.useState(generatePassword);
+  const [yearGroup, setYearGroup] = React.useState("");
+  const [usualSlot, setUsualSlot] = React.useState("");
 
   React.useEffect(() => {
     if (open) return;
     setName("");
-    setEmail("");
-    setGrade("Grade 11");
-    setCadence("");
-    setSubjects([]);
-    setFocus("");
+    setUsername("");
+    setUsernameTouched(false);
+    setPassword(generatePassword());
+    setYearGroup("");
+    setUsualSlot("");
   }, [open]);
 
-  const valid = name.trim().length > 1 && subjects.length > 0;
+  const effectiveUsername = usernameTouched ? username : suggestUsername(name);
+  const taken = students.some(
+    (s) => s.username.toLowerCase() === effectiveUsername.trim().toLowerCase()
+  );
+  const valid = name.trim().length > 1 && effectiveUsername.trim().length > 1 && !taken;
 
   const submit = () => {
     if (!valid) return;
     const student = addStudent({
       name: name.trim(),
-      email: email.trim() || `${name.trim().toLowerCase().replace(/\s+/g, ".")}@example.com`,
-      grade,
-      subjects,
-      focus: focus.trim() || "No focus notes yet.",
-      goals: [],
+      username: effectiveUsername.trim(),
+      yearGroup: yearGroup.trim() || undefined,
+      usualSlot: usualSlot.trim() || undefined,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      cadence: cadence.trim() || "Not scheduled",
     });
     onOpenChange(false);
     router.push(`/teacher/students/${student.id}`);
@@ -72,77 +76,73 @@ export function AddStudentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent width="lg">
+      <DialogContent width="md">
         <DialogHeader
           title="Add a student"
-          description="Only the name and subjects are required — everything else can be filled in later."
+          description="They sign in with a username and password. No email needed."
         />
         <DialogBody className="space-y-4">
+          <Field label="Name">
+            <Input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && valid) submit();
+              }}
+              placeholder="Ada Lovelace"
+            />
+          </Field>
+
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Full name">
+            <Field label="Username" hint={taken ? "already taken" : undefined}>
               <Input
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ada Lovelace"
+                value={effectiveUsername}
+                onChange={(e) => {
+                  setUsernameTouched(true);
+                  setUsername(e.target.value);
+                }}
+                placeholder="ada.l"
+                className={taken ? "border-danger/60" : undefined}
               />
             </Field>
-            <Field label="Email" hint="optional">
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="ada@school.edu"
-              />
+            <Field label="Password">
+              <div className="flex gap-1.5">
+                <Input value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  type="button"
+                  aria-label="Generate a new password"
+                  onClick={() => setPassword(generatePassword())}
+                >
+                  <RefreshCw />
+                </Button>
+              </div>
             </Field>
-            <Field label="Year group">
-              <Input value={grade} onChange={(e) => setGrade(e.target.value)} />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Year group" hint="optional">
+              <Input
+                value={yearGroup}
+                onChange={(e) => setYearGroup(e.target.value)}
+                placeholder="Grade 11"
+              />
             </Field>
             <Field label="Usual slot" hint="optional">
               <Input
-                value={cadence}
-                onChange={(e) => setCadence(e.target.value)}
+                value={usualSlot}
+                onChange={(e) => setUsualSlot(e.target.value)}
                 placeholder="Tue & Thu · 5:00 PM"
               />
             </Field>
           </div>
 
-          <div className="space-y-1.5">
-            <span className="text-xs font-medium text-ink">Subjects</span>
-            <div className="flex flex-wrap gap-1.5">
-              {SUBJECTS.map((s) => {
-                const on = subjects.includes(s);
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() =>
-                      setSubjects((prev) =>
-                        on ? prev.filter((x) => x !== s) : [...prev, s]
-                      )
-                    }
-                    className={cn(
-                      "h-7 rounded border px-2.5 text-[13px] transition-colors",
-                      on
-                        ? "border-ink bg-ink text-canvas"
-                        : "border-line text-muted hover:border-line-strong hover:text-ink"
-                    )}
-                  >
-                    {s}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <Field label="What are you working on?" hint="shown during live sessions">
-            <Textarea
-              rows={3}
-              value={focus}
-              onChange={(e) => setFocus(e.target.value)}
-              placeholder="Quadratics — can factorise but freezes on word problems."
-            />
-          </Field>
+          <p className="text-2xs leading-relaxed text-faint">
+            Write the password down now — it is stored hashed and cannot be read back. You can reset
+            it any time from the student&apos;s profile.
+          </p>
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

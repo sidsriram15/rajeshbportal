@@ -1,6 +1,11 @@
-# Cadence
+# Tutoring app
 
-A UI prototype for a tutoring management platform. Frontend only — no backend, no auth, no Zoom, no AI. Every interaction runs on local React state over mock data.
+An automatic record of what happened in each tutoring class. The teacher picks a
+student, presses start, teaches, presses end, and moves on — topics, questions,
+answers, the summary and next steps are produced from the class itself.
+
+Currently at **end of Phase 1**. See [PLAN.md](PLAN.md) for the full V1 plan and
+the remaining phases.
 
 ```bash
 npm install
@@ -9,54 +14,69 @@ npm run dev
 
 Then open http://localhost:3000.
 
-## Switching portals
+## Status
 
-Bottom-right of every screen there is a **Viewing as** control. Use it to jump between the teacher portal and the student portal, sign in as any of the eight mock students, and toggle light/dark. It is a prototype affordance and is hidden during a live session.
+| | |
+| --- | --- |
+| UI | Real |
+| Data | Local React state over `lib/mock-data.ts` — deleted in Phase 3 |
+| Auth | None yet — Phase 2 |
+| Audio capture | None yet — Phase 4 |
+| Transcription | None yet — Phase 4 |
+| AI write-up | None yet — Phase 5 |
+
+Nothing here fakes a backend. There is no simulated recording, no scripted
+lesson playback and no pretend AI: a class you start now records elapsed time
+and accepts anything you note yourself, and that is all it claims to do.
+
+Until sign-in exists there is a **Viewing as** control in the bottom-right
+corner for switching between the teacher and student views. It is temporary and
+is removed in Phase 2.
 
 ## Routes
 
 | Route | What it is |
 | --- | --- |
-| `/teacher` | Overview — live session banner, week metrics, what needs review |
-| `/teacher/students` | Searchable, filterable, sortable student list + add student |
-| `/teacher/students/[id]` | Profile: sessions, aggregated topics, every question, every resource |
-| `/teacher/sessions` | All sessions, grouped by day, filterable by review state |
-| `/teacher/sessions/[id]` | Review: edit the summary, publish it, fix topics/questions/links |
-| `/session/[id]` | **Active session** — full-screen, its own chrome |
-| `/student` | Student home — published lessons only |
-| `/student/sessions/[id]` | Lesson review: summary, topics, Q&A, links, practice |
+| `/teacher` | Overview — recording banner, needs attention, recent classes |
+| `/teacher/students` | Searchable student list, add student |
+| `/teacher/sessions` | All classes grouped by day |
+| `/teacher/sessions/[id]` | View / edit a class — write-up, timeline, transcript |
+| `/teacher/students/[id]` | One page: working on, goals, recent classes, details |
+| `/session/[id]` | Active class — full screen, its own chrome |
+| `/student` | Student home — their classes |
+| `/student/sessions/[id]` | One class: summary, topics, Q&A, key points, practice |
 
-## The active session screen
-
-Start one with **Start session** (or press `N`) from anywhere in the teacher portal.
-
-Once running, a scripted stream plays into the session over the first ~2.5 minutes: topics get detected, the student asks questions, answers land, links are shared, and the transcript fills in. It is fake, obviously, but it makes the screen behave the way the real thing would.
-
-Three columns: student context on the left, the live timeline in the middle, capture panels on the right. The capture bar along the bottom is the primary input — one field, four modes.
-
-**Shortcuts**
+## Shortcuts
 
 | Key | Action |
 | --- | --- |
-| `N` | Start a session (teacher portal) |
+| `N` | Start a class |
 | `/` | Jump to student search |
-| `C` | Focus the capture bar |
-| `⌘1`–`⌘4` | Topic / Question / Answer / Resource mode |
+| `C` | Focus the capture bar during a class |
 | `T` | Toggle the live transcript |
 | `⌘↵` | Save an inline edit |
 
-Ending a session runs a simulated summary generation, then drops you on the review screen with a draft. Nothing reaches the student until you press **Publish**.
-
 ## Design notes
 
-Warm paper background, hairline borders, near-black ink for primary actions. Interface type is small and dense; reading type (the summary a student actually reads) is larger and generously leaded — the two are deliberately different.
+Dark by default, with a light theme available from the account menu. Hairline
+borders, small dense interface type, larger and more generously leaded reading
+type for the things a student actually reads.
 
-Four semantic colours carry the whole product: topics are indigo, questions amber, answers green, resources violet. They stay consistent across the timeline, the panels, the badges and the student view, so you learn them once.
+Four semantic colours carry the product: topics indigo, questions amber, answers
+green, resources violet. They stay consistent across the timeline, the panels,
+the badges and the student view.
 
-No charts. Where density needed showing — topic confidence, time per student — there are tick meters instead. Numbers are monospaced and tabular so columns line up and the session clock doesn't jitter.
+No charts and no vanity statistics. Where density needs showing there are tick
+meters. Numbers are monospaced and tabular so columns line up and the session
+clock doesn't jitter.
+
+Anything the AI produced and the teacher hasn't touched carries a small `AI`
+mark. A teacher edit takes that mark away and, from Phase 5 onward, prevents the
+AI from overwriting it.
 
 ## Stack
 
-Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS · Radix primitives styled in-repo (shadcn/ui conventions) · Lucide icons.
+Next.js 14 (App Router) · React 18 · TypeScript · Tailwind CSS · Radix
+primitives styled in-repo · Lucide icons.
 
-State lives in `lib/store.tsx` — one context, mock data in `lib/mock-data.ts`. Mutations are real; persistence is not.
+Supabase, transcription and OpenRouter arrive in Phases 2, 4 and 5.

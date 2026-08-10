@@ -15,11 +15,14 @@ import { initials } from "@/lib/format";
 export function Avatar({
   name,
   color,
+  src,
   size = "md",
   className,
 }: {
   name: string;
   color?: string;
+  /** Profile photo. Falls back to initials when absent or it fails to load. */
+  src?: string;
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }) {
@@ -42,6 +45,9 @@ export function Avatar({
           : undefined
       }
     >
+      {src ? (
+        <AvatarPrimitive.Image src={src} alt="" className="size-full object-cover" />
+      ) : null}
       <AvatarPrimitive.Fallback
         className={cn(
           "flex size-full items-center justify-center",
@@ -81,6 +87,26 @@ export function Badge({
   ...props
 }: React.HTMLAttributes<HTMLSpanElement> & VariantProps<typeof badgeVariants>) {
   return <span className={cn(badgeVariants({ tone }), className)} {...props} />;
+}
+
+/* ----------------------------------------------------------------- AiMark */
+
+/**
+ * Marks content the AI wrote and the teacher has not touched. Deliberately
+ * quiet — it is a provenance note, not a feature badge.
+ */
+export function AiMark({ label = "Automatic", className }: { label?: string; className?: string }) {
+  return (
+    <span
+      className={cn("inline-flex items-center gap-1 text-2xs text-faint", className)}
+      title="Generated from the lesson. Edit to take it over."
+    >
+      <span className="grid size-3 place-items-center rounded-[2px] border border-line-strong text-[7px] font-semibold leading-none tracking-tight">
+        AI
+      </span>
+      {label}
+    </span>
+  );
 }
 
 /* --------------------------------------------------------------- Separator */

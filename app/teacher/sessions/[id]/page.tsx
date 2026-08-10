@@ -3,15 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  Check,
-  Clock,
-  Ear,
-  Eye,
-  MoreHorizontal,
-  Send,
-  Undo2,
-} from "lucide-react";
+import { Check, Clock, Ear, Eye, TriangleAlert } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/session-row";
 import {
@@ -24,105 +16,74 @@ import {
   TabsTrigger,
 } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
-import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { Timeline } from "@/components/session/timeline";
 import { QuestionsPanel, ResourcesPanel, TopicsPanel } from "@/components/session/panels";
-import { GeneratingSummary, RegenerateHint, SummaryEditor } from "@/components/session/summary-editor";
+import { NotesEditor, ProcessingNotice, SummaryEditor } from "@/components/session/write-up";
 import { useStore } from "@/lib/store";
-import { dateLabel, stamp, timeLabel } from "@/lib/format";
+import { dateLabel, durationLabel, stamp, timeLabel } from "@/lib/format";
 
-export default function SessionReview({ params }: { params: { id: string } }) {
-  const { sessions, students, publishSummary, unpublishSummary, summaryPhase, clearSummaryPhase } =
-    useStore();
+export default function SessionView({ params }: { params: { id: string } }) {
+  const { sessions, students, resolveAttention } = useStore();
   const session = sessions.find((s) => s.id === params.id);
-  const student = students.find((s) => s.id === session?.studentId);
+  const student = students.find((s) => s.id === session?.participants[0]);
   const [tab, setTab] = React.useState("summary");
-  const [justPublished, setJustPublished] = React.useState(false);
-
-  /* Deep links from the overview open the right tab. */
-  React.useEffect(() => {
-    if (window.location.search.includes("tab=questions")) setTab("timeline");
-  }, []);
-
-  React.useEffect(() => {
-    if (summaryPhase !== "ready") return;
-    const t = window.setTimeout(clearSummaryPhase, 400);
-    return () => window.clearTimeout(t);
-  }, [summaryPhase, clearSummaryPhase]);
 
   if (!session || !student) notFound();
 
-  const generating = summaryPhase === "generating" && session.status === "draft";
-  const published = session.status === "published";
-  const unanswered = session.qa.filter((q) => !q.answer).length;
-
-  const publish = () => {
-    publishSummary(session.id);
-    setJustPublished(true);
-    window.setTimeout(() => setJustPublished(false), 2200);
-  };
+  const processing = session.status === "processing";
+  const unresolved = session.attention.filter((a) => !a.resolvedAt);
+  const visibleToStudent = session.publishedAt !== null && session.status === "ready";
 
   return (
     <>
       <PageHeader
         crumbs={[
-          { label: "Sessions", href: "/teacher/sessions" },
+          { label: "Classes", href: "/teacher/sessions" },
           { label: student.name, href: `/teacher/students/${student.id}` },
         ]}
-        title={session.title}
+        title={dateLabel(session.startedAt)}
         meta={
           <>
             <StatusBadge status={session.status} />
             <span className="text-2xs text-faint">
-              {dateLabel(session.startedAt)} · {timeLabel(session.startedAt)} ·{" "}
-              <span className="num">{session.durationMin}m</span>
+              {timeLabel(session.startedAt)} ·{" "}
+              <span className="num">{durationLabel(session.durationSeconds)}</span>
             </span>
+            {visibleToStudent ? (
+              <span className="flex items-center gap-1 text-2xs text-answer">
+                <Check className="size-3" />
+                Shared with {student.name.split(" ")[0]}
+              </span>
+            ) : null}
           </>
         }
         actions={
-          <>
+          visibleToStudent ? (
             <Button variant="ghost" size="sm" asChild>
               <Link href={`/student/sessions/${session.id}`}>
                 <Eye className="size-3.5" />
                 <span className="hidden sm:inline">Student view</span>
               </Link>
             </Button>
-            {published ? (
-              <Menu>
-                <MenuTrigger asChild>
-                  <Button variant="secondary" size="sm">
-                    <Check className="size-3.5 text-answer" />
-                    Published
-                    <MoreHorizontal className="size-3.5" />
-                  </Button>
-                </MenuTrigger>
-                <MenuContent>
-                  <MenuItem onSelect={publish}>
-                    <Send />
-                    Re-publish with edits
-                  </MenuItem>
-                  <MenuItem destructive onSelect={() => unpublishSummary(session.id)}>
-                    <Undo2 />
-                    Unpublish
-                  </MenuItem>
-                </MenuContent>
-              </Menu>
-            ) : (
-              <Button variant="primary" size="sm" disabled={generating} onClick={publish}>
-                <Send className="size-3.5" />
-                Publish to {student.name.split(" ")[0]}
-              </Button>
-            )}
-          </>
+          ) : null
         }
       />
 
-      {justPublished ? (
-        <div className="animate-fade-up border-b border-answer/25 bg-answer/[0.07] px-5 py-2 text-xs text-ink lg:px-7">
-          <span className="flex items-center gap-2">
-            <Check className="size-3.5 text-answer" />
-            Published — {student.name.split(" ")[0]} can now read this session in their portal.
-          </span>
+      {unresolved.length ? (
+        <div className="border-b border-question/25 bg-question/[0.06] px-5 py-2.5 lg:px-7">
+          {unresolved.map((item) => (
+            <div key={item.id} className="flex items-start gap-2.5 text-xs text-ink">
+              <TriangleAlert className="mt-px size-3.5 shrink-0 text-question" />
+              <span className="flex-1 leading-relaxed">{item.message}</span>
+              <Button
+                size="xs"
+                variant="secondary"
+                onClick={() => resolveAttention(session.id, item.id)}
+              >
+                Resolve and share
+              </Button>
+            </div>
+          ))}
         </div>
       ) : null}
 
@@ -130,39 +91,46 @@ export default function SessionReview({ params }: { params: { id: string } }) {
         <div className="min-w-0 space-y-4">
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
-              <TabsTrigger value="summary">Summary</TabsTrigger>
+              <TabsTrigger value="summary">Write-up</TabsTrigger>
               <TabsTrigger value="timeline">
                 Timeline
                 <Badge tone="outline" className="num">
-                  {session.events.length}
+                  {session.topics.length + session.questions.length}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="transcript">Transcript</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="summary" className="space-y-3 pt-4">
-              {generating ? <GeneratingSummary /> : <SummaryEditor session={session} />}
-              {!generating ? <RegenerateHint /> : null}
+            <TabsContent value="summary" className="space-y-5 pt-4">
+              {processing ? (
+                <ProcessingNotice />
+              ) : (
+                <>
+                  <SummaryEditor session={session} />
+                  <NotesEditor session={session} kind="key_point" />
+                  <NotesEditor session={session} kind="practice" />
+                </>
+              )}
             </TabsContent>
 
             <TabsContent value="timeline" className="pt-4">
               <div className="panel py-2">
                 <Timeline session={session} editable />
               </div>
-              {unanswered > 0 ? (
-                <p className="mt-2 px-1 text-2xs text-question">
-                  {unanswered} question{unanswered > 1 ? "s have" : " has"} no answer recorded yet.
-                </p>
-              ) : null}
             </TabsContent>
 
             <TabsContent value="transcript" className="pt-4">
               <div className="panel">
                 {session.transcript.length ? (
                   <div className="space-y-2.5 px-4 py-3.5">
-                    {session.transcript.map((line, i) => (
-                      <p key={i} className="flex gap-3 text-[13px] leading-relaxed">
-                        <span className="num shrink-0 text-2xs text-faint">{stamp(line.at)}</span>
+                    <p className="pb-1 text-2xs text-faint">
+                      Only you can see this. Students never get the raw transcript.
+                    </p>
+                    {session.transcript.map((line) => (
+                      <p key={line.id} className="flex gap-3 text-[13px] leading-relaxed">
+                        <span className="num shrink-0 text-2xs text-faint">
+                          {stamp(line.startMs)}
+                        </span>
                         <span
                           className={`w-14 shrink-0 text-2xs font-medium ${
                             line.speaker === "teacher" ? "text-accent" : "text-answer"
@@ -177,8 +145,8 @@ export default function SessionReview({ params }: { params: { id: string } }) {
                 ) : (
                   <EmptyState
                     icon={Ear}
-                    title="No transcript stored"
-                    description="Transcripts are kept for sessions recorded through Zoom. This one was logged manually."
+                    title="No transcript"
+                    description="Nothing was captured for this class."
                   />
                 )}
               </div>
@@ -186,25 +154,24 @@ export default function SessionReview({ params }: { params: { id: string } }) {
           </Tabs>
         </div>
 
-        {/* rail */}
         <div className="space-y-5">
           <div className="panel p-3.5">
             <Link
               href={`/teacher/students/${student.id}`}
               className="flex items-center gap-2.5 rounded transition-opacity hover:opacity-80"
             >
-              <Avatar name={student.name} color={student.color} />
+              <Avatar name={student.name} color={student.color} src={student.avatarUrl} />
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-medium text-ink">{student.name}</p>
-                <p className="truncate text-2xs text-faint">
-                  {student.grade} · {session.subject}
-                </p>
+                {student.yearGroup ? (
+                  <p className="truncate text-2xs text-faint">{student.yearGroup}</p>
+                ) : null}
               </div>
             </Link>
             <div className="mt-3 flex items-center gap-2 border-t border-line pt-3 text-2xs text-faint">
               <Clock className="size-3" />
-              {session.durationMin} minutes · {session.topics.length} topics · {session.qa.length}{" "}
-              questions
+              {durationLabel(session.durationSeconds)} · {session.topics.length} topics ·{" "}
+              {session.questions.length} questions
             </div>
           </div>
 
@@ -212,7 +179,7 @@ export default function SessionReview({ params }: { params: { id: string } }) {
             <TopicsPanel session={session} editable />
           </Panel>
 
-          <Panel title="Questions & answers" count={session.qa.length}>
+          <Panel title="Questions & answers" count={session.questions.length}>
             <QuestionsPanel session={session} editable />
           </Panel>
 

@@ -9,7 +9,6 @@ import {
   MessageSquareQuote,
   MoreHorizontal,
   Pencil,
-  Radio,
   Tag,
   Trash2,
   X,
@@ -19,16 +18,20 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/menu";
 import { useStore } from "@/lib/store";
-import { hostOf, stamp } from "@/lib/format";
-import type { Session, TimelineEvent } from "@/lib/types";
+import { buildTimeline, hostOf, stamp } from "@/lib/format";
+import type { Session, TimelineEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const kindMeta = {
   topic: { label: "Topic", dot: "bg-topic", text: "text-topic", icon: Tag },
-  question: { label: "Question", dot: "bg-question", text: "text-question", icon: MessageSquareQuote },
+  question: {
+    label: "Question",
+    dot: "bg-question",
+    text: "text-question",
+    icon: MessageSquareQuote,
+  },
   answer: { label: "Answer", dot: "bg-answer", text: "text-answer", icon: CornerDownRight },
   resource: { label: "Resource", dot: "bg-resource", text: "text-resource", icon: Link2 },
-  system: { label: "Session", dot: "bg-faint", text: "text-faint", icon: Radio },
 } as const;
 
 export function Timeline({
@@ -40,32 +43,30 @@ export function Timeline({
   session: Session;
   editable: boolean;
   autoScroll?: boolean;
-  filter?: Array<TimelineEvent["kind"]>;
+  filter?: Array<TimelineEntry["kind"]>;
 }) {
   const endRef = React.useRef<HTMLDivElement>(null);
-  const events = filter?.length
-    ? session.events.filter((e) => filter.includes(e.kind))
-    : session.events;
+  const all = React.useMemo(() => buildTimeline(session), [session]);
+  const entries = filter?.length ? all.filter((e) => filter.includes(e.kind)) : all;
 
   React.useEffect(() => {
     if (!autoScroll) return;
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [events.length, autoScroll]);
+  }, [entries.length, autoScroll]);
 
   return (
     <ol className="relative pl-[52px]">
-      {/* the rule */}
       <span
         className="absolute left-[52px] top-2 h-[calc(100%-16px)] w-px -translate-x-1/2 bg-line"
         aria-hidden
       />
-      {events.map((event, i) => (
+      {entries.map((entry, i) => (
         <TimelineItem
-          key={event.id}
-          event={event}
+          key={entry.id}
+          entry={entry}
           session={session}
           editable={editable}
-          fresh={autoScroll ? i >= events.length - 1 : false}
+          fresh={autoScroll ? i >= entries.length - 1 : false}
         />
       ))}
       <div ref={endRef} />
@@ -74,39 +75,41 @@ export function Timeline({
 }
 
 function TimelineItem({
-  event,
+  entry,
   session,
   editable,
   fresh,
 }: {
-  event: TimelineEvent;
+  entry: TimelineEntry;
   session: Session;
   editable: boolean;
   fresh: boolean;
 }) {
-  const { updateTopic, removeTopic, updateQA, removeQA, removeResource } = useStore();
+  const { updateTopic, removeTopic, updateQuestion, removeQuestion, removeResource } = useStore();
   const [editing, setEditing] = React.useState(false);
-  const [draft, setDraft] = React.useState(event.title);
+  const [draft, setDraft] = React.useState(entry.title);
 
-  const meta = kindMeta[event.kind];
-  const topic = session.topics.find((t) => t.id === event.refId);
-  const qa = session.qa.find((q) => q.id === event.refId);
-  const resource = session.resources.find((r) => r.id === event.refId);
+  const meta = kindMeta[entry.kind];
+  const topic = session.topics.find((t) => t.id === entry.refId);
+  const question = session.questions.find((q) => q.id === entry.refId);
+  const resource = session.resources.find((r) => r.id === entry.refId);
 
   const save = () => {
     const value = draft.trim();
     if (value) {
-      if (event.kind === "topic" && topic) updateTopic(session.id, topic.id, { label: value });
-      if (event.kind === "question" && qa) updateQA(session.id, qa.id, { question: value });
-      if (event.kind === "answer" && qa) updateQA(session.id, qa.id, { answer: value });
+      if (entry.kind === "topic" && topic) updateTopic(session.id, topic.id, value);
+      if (entry.kind === "question" && question)
+        updateQuestion(session.id, question.id, { text: value });
+      if (entry.kind === "answer" && question)
+        updateQuestion(session.id, question.id, { answer: value });
     }
     setEditing(false);
   };
 
   const remove = () => {
-    if (event.kind === "topic" && topic) removeTopic(session.id, topic.id);
+    if (entry.kind === "topic" && topic) removeTopic(session.id, topic.id);
     else if (resource) removeResource(session.id, resource.id);
-    else if (qa) removeQA(session.id, qa.id);
+    else if (question) removeQuestion(session.id, question.id);
   };
 
   return (
@@ -117,7 +120,7 @@ function TimelineItem({
       )}
     >
       <span className="num w-[30px] shrink-0 pt-[3px] text-right text-2xs text-faint">
-        {stamp(event.at)}
+        {stamp(entry.atMs)}
       </span>
 
       <span className="relative w-3 shrink-0 pt-[7px]">
@@ -125,7 +128,7 @@ function TimelineItem({
           className={cn(
             "block size-[7px] rounded-full ring-4 ring-canvas transition-transform",
             meta.dot,
-            event.kind === "answer" && "size-[5px] opacity-70",
+            entry.kind === "answer" && "size-[5px] opacity-70",
             fresh && "animate-pulse-ring"
           )}
         />
@@ -136,14 +139,15 @@ function TimelineItem({
           <span className={cn("text-2xs font-medium uppercase tracking-[0.07em]", meta.text)}>
             {meta.label}
           </span>
-          {topic?.source === "manual" || qa?.source === "manual" ? (
-            <Badge tone="outline">manual</Badge>
+          {entry.editedByTeacher && entry.kind !== "resource" ? (
+            <Badge tone="outline">edited</Badge>
           ) : null}
-          {topic && topic.source === "detected" && topic.confidence < 0.8 ? (
+          {topic && topic.origin === "ai" && topic.confidence < 0.8 ? (
             <Badge tone="outline">low confidence</Badge>
           ) : null}
+          {question?.withheld ? <Badge tone="question">withheld</Badge> : null}
 
-          {editable && event.kind !== "system" ? (
+          {editable ? (
             <div className="ml-auto opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
               <Menu>
                 <MenuTrigger asChild>
@@ -152,10 +156,10 @@ function TimelineItem({
                   </Button>
                 </MenuTrigger>
                 <MenuContent>
-                  {event.kind !== "resource" ? (
+                  {entry.kind !== "resource" ? (
                     <MenuItem
                       onSelect={() => {
-                        setDraft(event.title);
+                        setDraft(entry.title);
                         setEditing(true);
                       }}
                     >
@@ -163,7 +167,7 @@ function TimelineItem({
                       Edit text
                     </MenuItem>
                   ) : null}
-                  {event.kind === "resource" && resource ? (
+                  {entry.kind === "resource" && resource?.url ? (
                     <MenuItem onSelect={() => window.open(resource.url, "_blank")}>
                       <ExternalLink />
                       Open link
@@ -183,7 +187,7 @@ function TimelineItem({
           <div className="mt-1 space-y-1.5">
             <Textarea
               autoFocus
-              rows={event.kind === "answer" ? 4 : 2}
+              rows={entry.kind === "answer" ? 4 : 2}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -205,7 +209,7 @@ function TimelineItem({
               </span>
             </div>
           </div>
-        ) : event.kind === "resource" && resource ? (
+        ) : entry.kind === "resource" && resource ? (
           <a
             href={resource.url}
             target="_blank"
@@ -213,37 +217,40 @@ function TimelineItem({
             className="mt-0.5 inline-flex max-w-full items-center gap-1.5 text-[13px] text-ink hover:underline"
           >
             <span className="truncate">{resource.title}</span>
-            <span className="shrink-0 text-2xs text-faint">{hostOf(resource.url)}</span>
+            {resource.url ? (
+              <span className="shrink-0 text-2xs text-faint">{hostOf(resource.url)}</span>
+            ) : null}
             <ExternalLink className="size-3 shrink-0 text-faint" />
           </a>
         ) : (
           <p
             className={cn(
               "mt-0.5 text-[13px] leading-relaxed",
-              event.kind === "answer" ? "text-muted" : "text-ink",
-              event.kind === "system" && "text-faint"
+              entry.kind === "answer" ? "text-muted" : "text-ink"
             )}
           >
-            {event.title}
+            {entry.title}
           </p>
         )}
 
-        {event.kind === "question" && qa && !qa.answer && editable ? (
-          <AnswerInline sessionId={session.id} qaId={qa.id} />
-        ) : null}
-
-        {event.kind === "system" && event.detail ? (
-          <p className="text-2xs text-faint">{event.detail}</p>
+        {entry.kind === "question" && question && !question.answer && editable ? (
+          <AnswerInline sessionId={session.id} questionId={question.id} />
         ) : null}
       </div>
     </li>
   );
 }
 
-function AnswerInline({ sessionId, qaId }: { sessionId: string; qaId: string }) {
-  const { updateQA } = useStore();
+function AnswerInline({ sessionId, questionId }: { sessionId: string; questionId: string }) {
+  const { updateQuestion } = useStore();
   const [open, setOpen] = React.useState(false);
   const [text, setText] = React.useState("");
+
+  const save = () => {
+    if (!text.trim()) return;
+    updateQuestion(sessionId, questionId, { answer: text.trim() });
+    setOpen(false);
+  };
 
   if (!open)
     return (
@@ -252,7 +259,7 @@ function AnswerInline({ sessionId, qaId }: { sessionId: string; qaId: string }) 
         className="mt-1.5 inline-flex items-center gap-1 rounded border border-dashed border-line px-1.5 py-0.5 text-2xs text-faint transition-colors hover:border-answer/40 hover:text-answer"
       >
         <CornerDownRight className="size-3" />
-        Record your answer
+        Add the answer
       </button>
     );
 
@@ -265,23 +272,12 @@ function AnswerInline({ sessionId, qaId }: { sessionId: string; qaId: string }) 
         placeholder="What did you tell them?"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && text.trim()) {
-            updateQA(sessionId, qaId, { answer: text.trim() });
-            setOpen(false);
-          }
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) save();
           if (e.key === "Escape") setOpen(false);
         }}
       />
       <div className="flex items-center gap-1.5">
-        <Button
-          size="xs"
-          variant="primary"
-          disabled={!text.trim()}
-          onClick={() => {
-            updateQA(sessionId, qaId, { answer: text.trim() });
-            setOpen(false);
-          }}
-        >
+        <Button size="xs" variant="primary" disabled={!text.trim()} onClick={save}>
           Save answer
         </Button>
         <Button size="xs" variant="ghost" onClick={() => setOpen(false)}>

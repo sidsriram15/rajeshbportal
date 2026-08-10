@@ -3,51 +3,62 @@
 import * as React from "react";
 import Link from "next/link";
 import { notFound, useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight, Circle, Ear, Filter, Square, Target } from "lucide-react";
 import {
-  ChevronLeft,
-  ChevronRight,
-  Circle,
-  Dot,
-  Ear,
-  Filter,
-  Square,
-  Target,
-  Users,
-  Video,
-} from "lucide-react";
-import { Avatar, Badge, Separator, Tabs, TabsContent, TabsList, TabsTrigger, Tooltip } from "@/components/ui/primitives";
+  Avatar,
+  Badge,
+  Separator,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+  Tooltip,
+} from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { Timeline } from "@/components/session/timeline";
 import { Composer } from "@/components/session/composer";
+import { CaptureStatus } from "@/components/session/capture-status";
 import { QuestionsPanel, ResourcesPanel, TopicsPanel } from "@/components/session/panels";
 import { EndSessionDialog } from "@/components/session/end-session-dialog";
 import { Waveform } from "@/components/session/waveform";
-import { useStore, useStudentSessions } from "@/lib/store";
-import { clock, relativeDay, stamp } from "@/lib/format";
-import type { Session, TimelineEvent } from "@/lib/types";
+import { useStore, useStudentGoals, useStudentSessions } from "@/lib/store";
+import { buildTimeline, clock, durationLabel, relativeDay, stamp } from "@/lib/format";
+import type { Session, TimelineEntry } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const FILTERS: Array<{ id: TimelineEvent["kind"]; label: string; dot: string }> = [
+const FILTERS: Array<{ id: TimelineEntry["kind"]; label: string; dot: string }> = [
   { id: "topic", label: "Topics", dot: "bg-topic" },
   { id: "question", label: "Questions", dot: "bg-question" },
   { id: "answer", label: "Answers", dot: "bg-answer" },
-  { id: "resource", label: "Resources", dot: "bg-resource" },
+  { id: "resource", label: "Links", dot: "bg-resource" },
 ];
 
-export default function LiveSessionPage({ params }: { params: { id: string } }) {
-  const { sessions, students, liveId, elapsed } = useStore();
+export default function ActiveSessionPage({ params }: { params: { id: string } }) {
+  const { sessions, students, snapshots, liveId, elapsed } = useStore();
   const router = useRouter();
   const session = sessions.find((s) => s.id === params.id);
   const [endOpen, setEndOpen] = React.useState(false);
   const [transcriptOpen, setTranscriptOpen] = React.useState(false);
-  const [active, setActive] = React.useState<TimelineEvent["kind"][]>([]);
+  const [active, setActive] = React.useState<TimelineEntry["kind"][]>([]);
 
-  const student = students.find((s) => s.id === session?.studentId);
-  const history = useStudentSessions(session?.studentId);
+  const student = students.find((s) => s.id === session?.participants[0]);
+  const history = useStudentSessions(session?.participants[0]);
+  const goals = useStudentGoals(session?.participants[0]);
 
-  /* If the session has already ended, this screen has nothing to do. */
+  /*
+   * Opening a class that is already over should bounce to the read view — but
+   * ending a class from here must not, or the redirect races the teacher's own
+   * navigation and drops them back on a class they just finished.
+   */
+  const wasRecording = React.useRef(false);
   React.useEffect(() => {
-    if (session && session.status !== "live") router.replace(`/teacher/sessions/${session.id}`);
+    if (session?.status === "recording") wasRecording.current = true;
+  }, [session?.status]);
+
+  React.useEffect(() => {
+    if (session && session.status !== "recording" && !wasRecording.current) {
+      router.replace(`/teacher/sessions/${session.id}`);
+    }
   }, [session, router]);
 
   React.useEffect(() => {
@@ -66,12 +77,13 @@ export default function LiveSessionPage({ params }: { params: { id: string } }) 
 
   const isLive = liveId === session.id;
   const previous = history.filter((s) => s.id !== session.id)[0];
-  const toggle = (k: TimelineEvent["kind"]) =>
+  const snapshot = snapshots[student.id];
+  const entryCount = buildTimeline(session).length;
+  const toggle = (k: TimelineEntry["kind"]) =>
     setActive((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-canvas">
-      {/* ------------------------------------------------------------ header */}
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-3">
         <Link
           href="/teacher"
@@ -82,18 +94,12 @@ export default function LiveSessionPage({ params }: { params: { id: string } }) 
         </Link>
 
         <div className="flex min-w-0 items-center gap-2.5">
-          <Avatar name={student.name} color={student.color} size="sm" />
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-medium leading-tight text-ink">{student.name}</p>
-            <p className="truncate text-2xs leading-tight text-faint">
-              {session.subject} · {session.title}
-            </p>
-          </div>
+          <Avatar name={student.name} color={student.color} src={student.avatarUrl} size="sm" />
+          <p className="truncate text-[13px] font-medium text-ink">{student.name}</p>
         </div>
 
         <Separator orientation="vertical" className="mx-1 hidden h-6 sm:block" />
 
-        {/* Live status cluster */}
         <div className="flex items-center gap-2">
           <span
             className={cn(
@@ -114,22 +120,7 @@ export default function LiveSessionPage({ params }: { params: { id: string } }) 
             </span>
           </span>
 
-          <Tooltip label="Zoom · 2 participants, recording">
-            <span className="hidden items-center gap-1.5 rounded border border-line bg-canvas px-2 py-1 text-2xs text-muted sm:flex">
-              <Video className="size-3 text-answer" />
-              Zoom
-              <Dot className="-mx-1.5 size-3 text-line-strong" />
-              <Users className="size-3 text-faint" />
-              <span className="num">{session.zoom.participants}</span>
-            </span>
-          </Tooltip>
-
-          <Tooltip label="Transcribing live audio">
-            <span className="hidden items-center gap-2 rounded border border-line bg-canvas px-2 py-1 md:flex">
-              <Waveform active={isLive} bars={10} />
-              <span className="text-2xs text-muted">Transcribing</span>
-            </span>
-          </Tooltip>
+          <CaptureStatus capture={session.capture} />
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -145,28 +136,31 @@ export default function LiveSessionPage({ params }: { params: { id: string } }) 
           </Tooltip>
           <Button variant="danger" size="sm" onClick={() => setEndOpen(true)}>
             <Square className="size-3 fill-current" />
-            End session
+            End class
           </Button>
         </div>
       </header>
 
-      {/* -------------------------------------------------------------- body */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* context rail */}
         <aside className="hidden w-[264px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-line bg-surface/50 p-4 scrollbar-thin xl:flex">
-          <div>
-            <p className="eyebrow">Working on</p>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{student.focus}</p>
-          </div>
+          {snapshot ? (
+            <div>
+              <p className="eyebrow">Working on</p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{snapshot.workingOn}</p>
+            </div>
+          ) : null}
 
-          {student.goals.length ? (
+          {goals.length ? (
             <div>
               <p className="eyebrow">Goals</p>
               <ul className="mt-1.5 space-y-1.5">
-                {student.goals.map((g) => (
-                  <li key={g} className="flex items-start gap-2 text-xs leading-relaxed text-muted">
+                {goals.map((g) => (
+                  <li
+                    key={g.id}
+                    className="flex items-start gap-2 text-xs leading-relaxed text-muted"
+                  >
                     <Target className="mt-0.5 size-3 shrink-0 text-faint" />
-                    {g}
+                    {g.text}
                   </li>
                 ))}
               </ul>
@@ -175,17 +169,16 @@ export default function LiveSessionPage({ params }: { params: { id: string } }) 
 
           {previous ? (
             <div>
-              <p className="eyebrow">Last session</p>
+              <p className="eyebrow">Last class</p>
               <Link
                 href={`/teacher/sessions/${previous.id}`}
                 className="group mt-1.5 block rounded border border-line bg-surface p-2.5 transition-colors hover:border-line-strong"
               >
-                <p className="text-[13px] font-medium leading-snug text-ink">{previous.title}</p>
-                <p className="mt-0.5 text-2xs text-faint">
-                  {relativeDay(previous.startedAt)} · {previous.durationMin}m
+                <p className="text-2xs text-faint">
+                  {relativeDay(previous.startedAt)} · {durationLabel(previous.durationSeconds)}
                 </p>
-                <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-muted">
-                  {previous.summary.split("\n\n").at(-1)}
+                <p className="mt-1 line-clamp-4 text-xs leading-relaxed text-muted">
+                  {previous.summary?.split("\n\n").at(-1) ?? "No summary."}
                 </p>
                 <span className="mt-1.5 inline-flex items-center gap-0.5 text-2xs text-accent">
                   Open
@@ -196,14 +189,12 @@ export default function LiveSessionPage({ params }: { params: { id: string } }) 
           ) : null}
 
           <div className="mt-auto space-y-1.5">
-            <p className="eyebrow">Shortcuts</p>
-            <ShortcutRow keys={["C"]} label="Focus capture bar" />
-            <ShortcutRow keys={["⌘", "1–4"]} label="Switch capture mode" />
+            <p className="eyebrow">Optional shortcuts</p>
+            <ShortcutRow keys={["C"]} label="Note something yourself" />
             <ShortcutRow keys={["T"]} label="Toggle transcript" />
           </div>
         </aside>
 
-        {/* timeline */}
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-2">
             <Filter className="size-3 text-faint" />
@@ -235,14 +226,12 @@ export default function LiveSessionPage({ params }: { params: { id: string } }) 
                 Clear
               </button>
             ) : (
-              <span className="ml-auto text-2xs text-faint">
-                {session.events.length} entries captured
-              </span>
+              <span className="ml-auto text-2xs text-faint">{entryCount} captured</span>
             )}
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2 scrollbar-thin">
-            {session.events.length <= 1 ? (
+            {entryCount === 0 ? (
               <ListeningState />
             ) : (
               <Timeline
@@ -259,7 +248,6 @@ export default function LiveSessionPage({ params }: { params: { id: string } }) 
           <Composer session={session} />
         </main>
 
-        {/* capture panels */}
         <aside className="hidden w-[336px] shrink-0 flex-col overflow-hidden border-l border-line bg-surface/50 lg:flex">
           <Tabs defaultValue="topics" className="flex min-h-0 flex-1 flex-col">
             <TabsList className="shrink-0 px-3 pt-2">
@@ -272,7 +260,7 @@ export default function LiveSessionPage({ params }: { params: { id: string } }) 
               <TabsTrigger value="questions">
                 Q&amp;A
                 <Badge tone="question" className="num">
-                  {session.qa.length}
+                  {session.questions.length}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="resources">
@@ -325,8 +313,7 @@ function ListeningState() {
       <div className="space-y-1">
         <p className="text-[13px] font-medium text-ink">Listening</p>
         <p className="mx-auto max-w-[34ch] text-xs leading-relaxed text-muted">
-          Topics, questions and answers will appear here as the lesson unfolds. You can also capture
-          anything yourself from the bar below.
+          Topics, questions and answers appear here as the class goes. Just teach.
         </p>
       </div>
     </div>
@@ -348,7 +335,7 @@ function TranscriptDrawer({ session, live }: { session: Session; live: boolean }
         {live ? (
           <span className="flex items-center gap-1 text-2xs text-answer">
             <span className="size-1 animate-pulse rounded-full bg-answer" />
-            recording
+            capturing
           </span>
         ) : null}
         <span className="ml-auto text-2xs text-faint">
@@ -359,9 +346,9 @@ function TranscriptDrawer({ session, live }: { session: Session; live: boolean }
         {session.transcript.length === 0 ? (
           <p className="py-8 text-center text-xs text-faint">Waiting for speech…</p>
         ) : null}
-        {session.transcript.map((line, i) => (
-          <p key={i} className="flex gap-2.5 text-xs leading-relaxed">
-            <span className="num shrink-0 text-2xs text-faint">{stamp(line.at)}</span>
+        {session.transcript.map((line) => (
+          <p key={line.id} className="flex gap-2.5 text-xs leading-relaxed">
+            <span className="num shrink-0 text-2xs text-faint">{stamp(line.startMs)}</span>
             <span
               className={cn(
                 "shrink-0 font-medium",
