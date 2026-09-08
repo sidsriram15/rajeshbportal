@@ -31,8 +31,8 @@ export const teacher: Teacher = { id: "t_1", name: "Rajesh B." };
 export const students: Student[] = [
   {
     id: "s_maya",
-    name: "Maya Krishnan",
-    username: "maya.k",
+    name: "Siddharth Sriram",
+    username: "siddharth.s",
     yearGroup: "Grade 11",
     usualSlot: "Tue & Thu · 5:00 PM",
     timezone: "America/Chicago",
@@ -41,8 +41,8 @@ export const students: Student[] = [
   },
   {
     id: "s_dev",
-    name: "Dev Okafor",
-    username: "dev.o",
+    name: "Rhea Sriram",
+    username: "rhea.s",
     yearGroup: "Grade 12",
     usualSlot: "Mon · 7:30 PM",
     timezone: "Europe/London",
@@ -51,8 +51,8 @@ export const students: Student[] = [
   },
   {
     id: "s_ana",
-    name: "Ana Beltrán",
-    username: "ana.b",
+    name: "Vihaan Karthick",
+    username: "vihaan.k",
     yearGroup: "Grade 10",
     usualSlot: "Wed · 6:00 PM",
     timezone: "America/Mexico_City",
@@ -61,8 +61,8 @@ export const students: Student[] = [
   },
   {
     id: "s_theo",
-    name: "Theo Lindqvist",
-    username: "theo.l",
+    name: "Anoushka Madhusudhan",
+    username: "anoushka.m",
     yearGroup: "Grade 9",
     usualSlot: "Sat · 10:00 AM",
     timezone: "Europe/Stockholm",
@@ -71,8 +71,8 @@ export const students: Student[] = [
   },
   {
     id: "s_priya",
-    name: "Priya Raman",
-    username: "priya.r",
+    name: "Akshara Madhusudhan",
+    username: "akshara.m",
     yearGroup: "Grade 12",
     timezone: "Asia/Kolkata",
     joinedAt: daysAgo(24),
