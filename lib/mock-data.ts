@@ -26,7 +26,7 @@ function daysAgo(n: number, hour = 17, minute = 0) {
 
 const min = (m: number) => m * 60_000;
 
-export const teacher: Teacher = { id: "t_1", name: "Rajesh Iyer" };
+export const teacher: Teacher = { id: "t_1", name: "Rajesh B." };
 
 export const students: Student[] = [
   {
